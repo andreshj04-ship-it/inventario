@@ -807,6 +807,7 @@ window.cancelEditCli=()=>{
   document.getElementById('cn-cancel').style.display='none';
   cliTab('lista',document.querySelectorAll('#page-clis .tabs button')[0]);
 };
+window.updateAbonoInfo=()=>{
   const cid=(document.getElementById('ab-cli')||{}).value;
   const el=document.getElementById('ab-saldo-info');if(!el)return;
   if(!cid){el.innerHTML='';return}
