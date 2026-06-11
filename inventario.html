@@ -443,7 +443,7 @@ service cloud.firestore {
 
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
-import{getAuth,signInWithPopup,GoogleAuthProvider,signOut as fbSignOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+import{getAuth,signInWithPopup,signInWithRedirect,getRedirectResult,GoogleAuthProvider,signOut as fbSignOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 import{getFirestore,collection,doc,setDoc,addDoc,updateDoc,deleteDoc,query,orderBy,onSnapshot,serverTimestamp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // ============================================================
@@ -468,12 +468,28 @@ const provider=notConfig?null:new GoogleAuthProvider();
 
 window.signInWithGoogle=async()=>{
   if(!auth)return;
-  try{await signInWithPopup(auth,provider)}
+  try{
+    const isMobile=/iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if(isMobile){
+      await signInWithRedirect(auth,provider);
+    } else {
+      await signInWithPopup(auth,provider);
+    }
+  }
   catch(e){const el=document.getElementById('auth-error');el.style.display='block';el.textContent='Error al iniciar sesión. Verificá la configuración.';}
 };
 window.signOut=async()=>{if(confirm('¿Cerrar sesión?'))await fbSignOut(auth);};
 
-if(auth)onAuthStateChanged(auth,user=>{
+if(auth){
+  // Manejar resultado de redirect (Safari/móvil)
+  getRedirectResult(auth).then(result=>{
+    if(result?.user){
+      document.getElementById('auth-screen').style.display='none';
+      document.getElementById('app').style.display='flex';
+    }
+  }).catch(e=>console.error(e));
+
+  onAuthStateChanged(auth,user=>{
   if(user){
     document.getElementById('auth-screen').style.display='none';
     document.getElementById('app').style.display='flex';
@@ -485,6 +501,7 @@ if(auth)onAuthStateChanged(auth,user=>{
     document.getElementById('app').style.display='none';
   }
 });
+}
 
 let PRODS=[],CLIS=[],VENTAS=[],MOVS=[];
 let ventaItems=[],tipoPago='contado',editProdId=null,editVentaId=null,editCliId=null;
