@@ -340,7 +340,7 @@ service cloud.firestore {
           <button class="btn suc" style="margin-bottom:12px" onclick="addItemVenta()">+ Agregar</button>
           <div id="v-items"></div>
           <div id="v-total" style="font-weight:800;font-size:17px;text-align:right;margin:10px 0;color:var(--accent2)"></div>
-          <button class="btn pri" onclick="guardarVenta()">Registrar venta</button>
+          <button class="btn pri" id="v-guardar-btn" onclick="guardarVenta()">Registrar venta</button>
         </div>
       </div>
       <div id="v-historial" style="display:none">
@@ -365,7 +365,7 @@ service cloud.firestore {
       </div>
       <div id="cli-nuevo" style="display:none">
         <div class="card">
-          <div class="card-hd"><div class="card-ico ci-blue">👤</div><div class="card-title">Nuevo cliente</div></div>
+          <div class="card-hd"><div class="card-ico ci-blue">👤</div><div class="card-title" id="cn-card-title">Nuevo cliente</div></div>
           <label>Nombre completo *</label><input id="cn-nom" placeholder="Nombre del cliente">
           <label>Código (vacío = autogenerado)</label><input id="cn-cod" placeholder="CLI-001">
           <div class="row2">
@@ -374,6 +374,7 @@ service cloud.firestore {
           </div>
           <label>Dirección</label><input id="cn-dir" placeholder="Barrio, ciudad...">
           <button class="btn pri" onclick="guardarCliente()">Guardar cliente</button>
+          <button class="btn ghost" id="cn-cancel" style="margin-top:6px;display:none" onclick="cancelEditCli()">Cancelar edición</button>
         </div>
       </div>
       <div id="cli-abono" style="display:none">
@@ -443,7 +444,7 @@ service cloud.firestore {
 <script type="module">
 import{initializeApp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import{getAuth,signInWithPopup,GoogleAuthProvider,signOut as fbSignOut,onAuthStateChanged}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
-import{getFirestore,collection,doc,setDoc,addDoc,updateDoc,query,orderBy,onSnapshot,serverTimestamp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import{getFirestore,collection,doc,setDoc,addDoc,updateDoc,deleteDoc,query,orderBy,onSnapshot,serverTimestamp}from'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // ============================================================
 // ⚙️  REEMPLAZÁ ESTO CON TU CONFIGURACIÓN DE FIREBASE
@@ -486,7 +487,7 @@ if(auth)onAuthStateChanged(auth,user=>{
 });
 
 let PRODS=[],CLIS=[],VENTAS=[],MOVS=[];
-let ventaItems=[],tipoPago='contado',editProdId=null;
+let ventaItems=[],tipoPago='contado',editProdId=null,editVentaId=null,editCliId=null;
 
 function initApp(){
   onSnapshot(collection(db,'productos'),s=>{PRODS=s.docs.map(d=>({id:d.id,...d.data()}));renderInv();fillSelProd();fillSelProdV();updateDash();});
@@ -562,12 +563,19 @@ window.renderInv=()=>{
         </div>
         <span class="badge ${(p.stock||0)<=(p.min||0)?'br':'bg'}">${p.stock||0} uds</span>
       </div>
-      <div style="display:flex;gap:14px;align-items:center;margin-top:7px;padding-left:48px">
+      <div style="display:flex;gap:7px;align-items:center;margin-top:8px;padding-left:48px">
         <span class="isub">Costo: ${fmt(p.costo)}</span>
         <span style="font-size:12px;font-weight:700;color:var(--accent2)">Venta: ${fmt(p.venta)}</span>
-        <button class="btn sm ghost" onclick="editProd('${p.id}')" style="margin-left:auto;padding:4px 10px">✏️ Editar</button>
+        <button class="btn sm ghost" onclick="editProd('${p.id}')" style="margin-left:auto;padding:4px 10px">✏️</button>
+        <button class="btn sm dan" onclick="eliminarProd('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">🗑️</button>
       </div>
     </div>`).join(''):'<div class="empty"><div class="empty-ico">📦</div>Sin productos registrados</div>';
+};
+
+window.eliminarProd=async(id,nombre)=>{
+  if(!confirm(`¿Eliminár "${nombre}"?\nEsto no se puede deshacer.`))return;
+  await deleteDoc(doc(db,'productos',id));
+  toast('Producto eliminado');
 };
 
 window.guardarProd=async()=>{
@@ -673,14 +681,21 @@ window.guardarVenta=async()=>{
   const cid=document.getElementById('v-cli').value;
   const fecha=document.getElementById('v-fecha').value||today();
   const total=ventaItems.reduce((a,i)=>a+i.sub,0);
-  await addDoc(collection(db,'ventas'),{fecha,clienteId:cid||null,tipo:tipoPago,total,items:ventaItems.map(i=>({...i})),createdAt:serverTimestamp()});
-  for(const i of ventaItems){const p=PRODS.find(x=>x.id===i.pid);if(p)await updateDoc(doc(db,'productos',i.pid),{stock:(p.stock||0)-i.qty,updatedAt:serverTimestamp()});}
-  if(cid&&tipoPago==='credito'){
-    const c=CLIS.find(x=>x.id===cid);
-    if(c){const hist=(c.historial||[]);hist.push({tipo:'venta',fecha,monto:total});await updateDoc(doc(db,'clientes',cid),{saldo:(c.saldo||0)+total,historial:hist,updatedAt:serverTimestamp()});}
+  if(editVentaId){
+    await updateDoc(doc(db,'ventas',editVentaId),{fecha,clienteId:cid||null,tipo:tipoPago,total,items:ventaItems.map(i=>({...i})),updatedAt:serverTimestamp()});
+    editVentaId=null;
+    document.getElementById('v-guardar-btn').textContent='Registrar venta';
+    toast('Venta actualizada');
+  } else {
+    await addDoc(collection(db,'ventas'),{fecha,clienteId:cid||null,tipo:tipoPago,total,items:ventaItems.map(i=>({...i})),createdAt:serverTimestamp()});
+    for(const i of ventaItems){const p=PRODS.find(x=>x.id===i.pid);if(p)await updateDoc(doc(db,'productos',i.pid),{stock:(p.stock||0)-i.qty,updatedAt:serverTimestamp()});}
+    if(cid&&tipoPago==='credito'){
+      const c=CLIS.find(x=>x.id===cid);
+      if(c){const hist=(c.historial||[]);hist.push({tipo:'venta',fecha,monto:total});await updateDoc(doc(db,'clientes',cid),{saldo:(c.saldo||0)+total,historial:hist,updatedAt:serverTimestamp()});}
+    }
+    await addDoc(collection(db,'movimientos'),{tipo:'venta',fecha,total,clienteId:cid||null,items:ventaItems.length,pago:tipoPago,prods:ventaItems.map(i=>i.nombre).join(', '),createdAt:serverTimestamp()});
+    toast('Venta registrada');
   }
-  await addDoc(collection(db,'movimientos'),{tipo:'venta',fecha,total,clienteId:cid||null,items:ventaItems.length,pago:tipoPago,prods:ventaItems.map(i=>i.nombre).join(', '),createdAt:serverTimestamp()});
-  toast('Venta registrada');
   ventaItems=[];renderItemsV();
   document.getElementById('v-cli').value='';updateCliInfo();fillSelProdV();
 };
@@ -691,7 +706,27 @@ window.renderVentasHist=()=>{
   if(nom)lista=lista.filter(v=>{const c=v.clienteId?CLIS.find(x=>x.id===v.clienteId):null;return c&&c.nombre.toLowerCase().includes(nom);});
   if(fecha)lista=lista.filter(v=>v.fecha===fecha);
   const el=document.getElementById('vh-list');if(!el)return;
-  el.innerHTML=lista.length?lista.map(v=>{const c=v.clienteId?CLIS.find(x=>x.id===v.clienteId):null;return`<div class="card" style="margin-bottom:8px"><div class="ir"><span style="font-weight:700">${c?c.nombre:'Venta directa'}</span><span class="badge ${v.tipo==='contado'?'bg':'ba'}">${fmt(v.total)}</span></div><div class="isub" style="margin-top:4px">${v.fecha} · ${v.tipo}</div><div class="isub" style="margin-top:4px">${(v.items||[]).map(i=>`${getCatIco(i.cat||'')} ${i.nombre} ×${i.qty}`).join(' · ')}</div></div>`;}).join(''):'<div class="empty"><div class="empty-ico">🛒</div>Sin ventas</div>';
+  el.innerHTML=lista.length?lista.map(v=>{const c=v.clienteId?CLIS.find(x=>x.id===v.clienteId):null;return`<div class="card" style="margin-bottom:8px"><div class="ir"><span style="font-weight:700">${c?c.nombre:'Venta directa'}</span><span class="badge ${v.tipo==='contado'?'bg':'ba'}">${fmt(v.total)}</span></div><div class="isub" style="margin-top:4px">${v.fecha} · ${v.tipo}</div><div class="isub" style="margin-top:4px">${(v.items||[]).map(i=>`${getCatIco(i.cat||'')} ${i.nombre} ×${i.qty}`).join(' · ')}</div><div style="display:flex;gap:7px;margin-top:8px"><button class="btn sm ghost" onclick="editVenta('${v.id}')">✏️ Editar</button><button class="btn sm dan" onclick="eliminarVenta('${v.id}','${v.fecha}')">🗑️ Eliminar</button></div></div>`;}).join(''):'<div class="empty"><div class="empty-ico">🛒</div>Sin ventas</div>';
+};
+
+window.editVenta=(id)=>{
+  const v=VENTAS.find(x=>x.id===id);if(!v)return;
+  ventaItems=(v.items||[]).map(i=>({...i}));
+  document.getElementById('v-cli').value=v.clienteId||'';
+  document.getElementById('v-fecha').value=v.fecha||today();
+  selPago(v.tipo||'contado');
+  renderItemsV();updateCliInfo();
+  editVentaId=id;
+  ventaTab('nueva',document.querySelectorAll('#page-ventas .tabs button')[0]);
+  document.getElementById('v-guardar-btn').textContent='Guardar cambios';
+  toast('Editando venta — modificá y guardá');
+  window.scrollTo(0,0);
+};
+
+window.eliminarVenta=async(id,fecha)=>{
+  if(!confirm(`¿Eliminar la venta del ${fecha}?\nEsto no restaura el stock automáticamente.`))return;
+  await deleteDoc(doc(db,'ventas',id));
+  toast('Venta eliminada');
 };
 
 window.renderClis=()=>{
@@ -713,6 +748,8 @@ window.renderClis=()=>{
       <div style="display:flex;gap:7px;margin-top:10px">
         <button class="btn sm ghost" onclick="verHistorial('${c.id}')">📋 Historial</button>
         <button class="btn sm suc" onclick="prepAbono('${c.id}')">💰 Abonar</button>
+        <button class="btn sm ghost" onclick="editCliente('${c.id}')" style="margin-left:auto">✏️</button>
+        <button class="btn sm dan" onclick="eliminarCliente('${c.id}','${c.nombre.replace(/'/g,"\\'")}')">🗑️</button>
       </div>
     </div>`;
   }).join(''):'<div class="empty"><div class="empty-ico">👥</div>Sin clientes</div>';
@@ -722,11 +759,40 @@ window.guardarCliente=async()=>{
   if(!nombre){toast('Ingresá el nombre',true);return}
   const codigoInput=document.getElementById('cn-cod').value.trim();
   const codigo=codigoInput||genCod('CLI-',CLIS,'codigo');
-  if(CLIS.some(c=>c.codigo===codigo)){toast('Ese código ya existe',true);return}
-  await addDoc(collection(db,'clientes'),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,saldo:0,historial:[],createdAt:serverTimestamp()});
-  toast('Cliente guardado');
+  if(CLIS.some(c=>c.codigo===codigo&&c.id!==editCliId)){toast('Ese código ya existe',true);return}
+  if(editCliId){
+    const c=CLIS.find(x=>x.id===editCliId);
+    await updateDoc(doc(db,'clientes',editCliId),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,updatedAt:serverTimestamp()});
+    editCliId=null;
+    document.getElementById('cn-card-title').textContent='Nuevo cliente';
+    document.getElementById('cn-cancel').style.display='none';
+    toast('Cliente actualizado');
+  } else {
+    await addDoc(collection(db,'clientes'),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,saldo:0,historial:[],createdAt:serverTimestamp()});
+    toast('Cliente guardado');
+  }
   ['cn-nom','cn-cod','cn-tel','cn-lim','cn-dir'].forEach(id=>document.getElementById(id).value='');
   cliTab('lista',document.querySelectorAll('#page-clis .tabs button')[0]);
+};
+
+window.editCliente=(id)=>{
+  const c=CLIS.find(x=>x.id===id);if(!c)return;
+  editCliId=id;
+  document.getElementById('cn-nom').value=c.nombre;
+  document.getElementById('cn-cod').value=c.codigo;
+  document.getElementById('cn-tel').value=c.tel||'';
+  document.getElementById('cn-dir').value=c.dir||'';
+  document.getElementById('cn-lim').value=c.limite||0;
+  document.getElementById('cn-card-title').textContent='Editar cliente';
+  document.getElementById('cn-cancel').style.display='flex';
+  cliTab('nuevo',document.querySelectorAll('#page-clis .tabs button')[1]);
+  window.scrollTo(0,0);
+};
+
+window.eliminarCliente=async(id,nombre)=>{
+  if(!confirm(`¿Eliminar a "${nombre}"?\nSe eliminarán también sus datos. Esto no se puede deshacer.`))return;
+  await deleteDoc(doc(db,'clientes',id));
+  toast('Cliente eliminado');
 };
 function fillSelAbono(){
   const s=document.getElementById('ab-cli');if(!s)return;
@@ -734,7 +800,13 @@ function fillSelAbono(){
   s.innerHTML=con.length?con.map(c=>`<option value="${c.id}">${c.nombre} — ${fmt(c.saldo)}</option>`).join(''):'<option value="">Sin clientes con saldo pendiente</option>';
   updateAbonoInfo();
 }
-window.updateAbonoInfo=()=>{
+window.cancelEditCli=()=>{
+  editCliId=null;
+  ['cn-nom','cn-cod','cn-tel','cn-lim','cn-dir'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cn-card-title').textContent='Nuevo cliente';
+  document.getElementById('cn-cancel').style.display='none';
+  cliTab('lista',document.querySelectorAll('#page-clis .tabs button')[0]);
+};
   const cid=(document.getElementById('ab-cli')||{}).value;
   const el=document.getElementById('ab-saldo-info');if(!el)return;
   if(!cid){el.innerHTML='';return}
@@ -750,15 +822,43 @@ window.registrarAbono=async()=>{
   const cid=document.getElementById('ab-cli').value;
   const monto=+document.getElementById('ab-monto').value;
   const fecha=document.getElementById('ab-fecha').value||today();
+  const nota=document.getElementById('ab-nota').value||'No especificado';
   if(!cid||monto<1){toast('Seleccioná cliente y monto',true);return}
   const c=CLIS.find(x=>x.id===cid);if(!c)return;
   if(monto>(c.saldo||0)){toast('El abono supera el saldo',true);return}
-  const hist=(c.historial||[]);hist.push({tipo:'abono',fecha,monto,nota:document.getElementById('ab-nota').value});
-  await updateDoc(doc(db,'clientes',cid),{saldo:(c.saldo||0)-monto,historial:hist,updatedAt:serverTimestamp()});
-  await addDoc(collection(db,'movimientos'),{tipo:'abono',fecha,clienteId:cid,clienteNombre:c.nombre,monto,nota:document.getElementById('ab-nota').value,createdAt:serverTimestamp()});
+  const saldoAnterior=c.saldo||0;
+  const nuevoSaldo=saldoAnterior-monto;
+  const hist=(c.historial||[]);hist.push({tipo:'abono',fecha,monto,nota});
+  await updateDoc(doc(db,'clientes',cid),{saldo:nuevoSaldo,historial:hist,updatedAt:serverTimestamp()});
+  await addDoc(collection(db,'movimientos'),{tipo:'abono',fecha,clienteId:cid,clienteNombre:c.nombre,monto,nota,createdAt:serverTimestamp()});
   toast(`Abono de ${fmt(monto)} registrado`);
   document.getElementById('ab-monto').value='';document.getElementById('ab-nota').value='';
   fillSelAbono();
+  const now=new Date();
+  document.getElementById('comp-monto').textContent=fmt(monto);
+  document.getElementById('comp-nombre').textContent=c.nombre;
+  document.getElementById('comp-codigo').textContent=c.codigo;
+  document.getElementById('comp-fecha').textContent=fecha;
+  document.getElementById('comp-nota').textContent=nota;
+  document.getElementById('comp-saldo-ant').textContent=fmt(saldoAnterior);
+  document.getElementById('comp-abono').textContent='− '+fmt(monto);
+  document.getElementById('comp-saldo-nuevo').textContent=fmt(nuevoSaldo);
+  document.getElementById('comp-timestamp').textContent=now.toLocaleDateString('es-CR')+' '+now.toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('modal-comp').classList.add('open');
+};
+
+window.compartirComp=()=>{
+  const nombre=document.getElementById('comp-nombre').textContent;
+  const codigo=document.getElementById('comp-codigo').textContent;
+  const monto=document.getElementById('comp-monto').textContent;
+  const fecha=document.getElementById('comp-fecha').textContent;
+  const nota=document.getElementById('comp-nota').textContent;
+  const ant=document.getElementById('comp-saldo-ant').textContent;
+  const nuevo=document.getElementById('comp-saldo-nuevo').textContent;
+  const ts=document.getElementById('comp-timestamp').textContent;
+  const texto=`✅ *Comprobante de Abono*\n\n👤 Cliente: ${nombre} (${codigo})\n📅 Fecha: ${fecha}\n💵 Abono recibido: ${monto}\n📝 Método: ${nota}\n\n📊 *Detalle de cuenta:*\nSaldo anterior: ${ant}\nAbono aplicado: − ${monto}\n*Nuevo saldo: ${nuevo}*\n\n🕐 ${ts}\n_Stock Manager_`;
+  const url=`https://wa.me/?text=${encodeURIComponent(texto)}`;
+  window.open(url,'_blank');
 };
 window.verHistorial=(id)=>{
   const c=CLIS.find(x=>x.id===id);if(!c)return;
@@ -796,5 +896,53 @@ window.renderMovs=()=>{
   }).join(''):'<div class="empty"><div class="empty-ico">🔄</div>Sin movimientos</div>';
 };
 </script>
+<!-- MODAL COMPROBANTE -->
+<div id="modal-comp" class="modal-bg" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal" style="border-radius:var(--radius-lg) var(--radius-lg) 0 0;padding:0;overflow:hidden">
+    <div id="comp-card" style="background:var(--bg2);padding:28px 24px">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="width:52px;height:52px;background:var(--green-bg);border:1px solid rgba(34,197,94,.3);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 10px">✓</div>
+        <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em">Comprobante de Abono</div>
+        <div style="font-size:22px;font-weight:800;color:var(--green);margin-top:4px" id="comp-monto"></div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:12px;color:var(--text2)">Cliente</span>
+          <span style="font-size:13px;font-weight:700" id="comp-nombre"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:12px;color:var(--text2)">Código</span>
+          <span style="font-size:13px;font-weight:600" id="comp-codigo"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:12px;color:var(--text2)">Fecha</span>
+          <span style="font-size:13px;font-weight:600" id="comp-fecha"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <span style="font-size:12px;color:var(--text2)">Método de pago</span>
+          <span style="font-size:13px;font-weight:600" id="comp-nota"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--text2)">Saldo anterior</span>
+          <span style="font-size:13px;color:var(--amber);font-weight:600" id="comp-saldo-ant"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--text2)">Abono aplicado</span>
+          <span style="font-size:13px;color:var(--green);font-weight:600" id="comp-abono"></span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--border)">
+          <span style="font-size:13px;font-weight:700">Nuevo saldo</span>
+          <span style="font-size:15px;font-weight:800;color:var(--accent2)" id="comp-saldo-nuevo"></span>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:10px;color:var(--text3)">Stock Manager · <span id="comp-timestamp"></span></div>
+    </div>
+    <div style="padding:14px;display:flex;gap:8px;background:var(--bg2);border-top:1px solid var(--border)">
+      <button class="btn ghost" style="flex:1" onclick="document.getElementById('modal-comp').classList.remove('open')">Cerrar</button>
+      <button class="btn pri" style="flex:2" onclick="compartirComp()">📤 Compartir comprobante</button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
