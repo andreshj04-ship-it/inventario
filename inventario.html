@@ -584,7 +584,7 @@ window.guardarProd=async()=>{
   const codigoInput=document.getElementById('np-cod').value.trim();
   const codigo=codigoInput||genCod('PRD-',PRODS,'codigo');
   if(!editProdId&&PRODS.some(p=>p.codigo===codigo)){toast('Ese código ya existe',true);return}
-  const data={nombre,codigo,cat:document.getElementById('np-cat').value,costo:+document.getElementById('np-costo').value||0,venta:+document.getElementById('np-venta').value||0,min:+document.getElementById('np-min').value||3,stock:editProdId?PRODS.find(p=>p.id===editProdId)?.stock||0:+document.getElementById('np-stock').value||0,updatedAt:serverTimestamp()};
+  const data={nombre,codigo,cat:document.getElementById('np-cat').value,costo:+document.getElementById('np-costo').value||0,venta:+document.getElementById('np-venta').value||0,min:+document.getElementById('np-min').value||3,stock:+document.getElementById('np-stock').value||0,updatedAt:serverTimestamp()};
   if(editProdId){await setDoc(doc(db,'productos',editProdId),data);editProdId=null;}
   else await addDoc(collection(db,'productos'),data);
   toast('Producto guardado');
