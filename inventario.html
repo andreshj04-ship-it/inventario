@@ -344,10 +344,21 @@ service cloud.firestore {
         </div>
       </div>
       <div id="v-historial" style="display:none">
-        <div class="frow">
-          <input id="vh-nom" placeholder="Filtrar por cliente..." oninput="renderVentasHist()">
-          <input id="vh-fecha" type="date" oninput="renderVentasHist()" style="max-width:150px">
+        <div class="card" style="margin-bottom:10px">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input id="vh-nom" placeholder="Filtrar por cliente..." oninput="renderVentasHist()" style="margin-bottom:0;flex:1">
+            <input id="vh-fecha" type="date" oninput="renderVentasHist()" style="margin-bottom:0;max-width:145px">
+          </div>
+          <div style="display:flex;gap:6px">
+            <select id="vh-tipo" onchange="renderVentasHist()" style="margin-bottom:0;flex:1">
+              <option value="">Todos los pagos</option>
+              <option value="contado">Solo contado</option>
+              <option value="credito">Solo crédito</option>
+            </select>
+            <button class="btn sm ghost" onclick="limpiarFiltrosV()" style="flex-shrink:0">Limpiar filtros</button>
+          </div>
         </div>
+        <div id="vh-resumen" style="margin-bottom:10px"></div>
         <div id="vh-list"></div>
       </div>
     </div>
@@ -702,11 +713,46 @@ window.guardarVenta=async()=>{
 window.renderVentasHist=()=>{
   const nom=(document.getElementById('vh-nom')||{}).value?.toLowerCase()||'';
   const fecha=(document.getElementById('vh-fecha')||{}).value||'';
+  const tipo=(document.getElementById('vh-tipo')||{}).value||'';
   let lista=[...VENTAS];
-  if(nom)lista=lista.filter(v=>{const c=v.clienteId?CLIS.find(x=>x.id===v.clienteId):null;return c&&c.nombre.toLowerCase().includes(nom);});
+  if(nom)lista=lista.filter(v=>{const c=v.clienteId?CLIS.find(x=>x.id===v.clienteId):null;return(c&&c.nombre.toLowerCase().includes(nom))||(!v.clienteId&&'venta directa'.includes(nom));});
   if(fecha)lista=lista.filter(v=>v.fecha===fecha);
+  if(tipo)lista=lista.filter(v=>v.tipo===tipo);
   const el=document.getElementById('vh-list');if(!el)return;
+  const totalVentas=lista.reduce((a,v)=>a+(v.total||0),0);
+  const totalContado=lista.filter(v=>v.tipo==='contado').reduce((a,v)=>a+(v.total||0),0);
+  const totalCredito=lista.filter(v=>v.tipo==='credito').reduce((a,v)=>a+(v.total||0),0);
+  const resEl=document.getElementById('vh-resumen');
+  if(resEl&&lista.length){
+    resEl.innerHTML=`<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px;text-align:center">
+        <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Total</div>
+        <div style="font-size:14px;font-weight:800;color:var(--accent2)">${fmt(totalVentas)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${lista.length} venta${lista.length!==1?'s':''}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px;text-align:center">
+        <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Contado</div>
+        <div style="font-size:14px;font-weight:800;color:var(--green)">${fmt(totalContado)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${lista.filter(v=>v.tipo==='contado').length} venta${lista.filter(v=>v.tipo==='contado').length!==1?'s':''}</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:10px;text-align:center">
+        <div style="font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Crédito</div>
+        <div style="font-size:14px;font-weight:800;color:var(--amber)">${fmt(totalCredito)}</div>
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">${lista.filter(v=>v.tipo==='credito').length} venta${lista.filter(v=>v.tipo==='credito').length!==1?'s':''}</div>
+      </div>
+    </div>`;
+  } else if(resEl){resEl.innerHTML='';}
   el.innerHTML=lista.length?lista.map(v=>{const c=v.clienteId?CLIS.find(x=>x.id===v.clienteId):null;return`<div class="card" style="margin-bottom:8px"><div class="ir"><span style="font-weight:700">${c?c.nombre:'Venta directa'}</span><span class="badge ${v.tipo==='contado'?'bg':'ba'}">${fmt(v.total)}</span></div><div class="isub" style="margin-top:4px">${v.fecha} · ${v.tipo}</div><div class="isub" style="margin-top:4px">${(v.items||[]).map(i=>`${getCatIco(i.cat||'')} ${i.nombre} ×${i.qty}`).join(' · ')}</div><div style="display:flex;gap:7px;margin-top:8px"><button class="btn sm ghost" onclick="editVenta('${v.id}')">✏️ Editar</button><button class="btn sm dan" onclick="eliminarVenta('${v.id}','${v.fecha}')">🗑️ Eliminar</button></div></div>`;}).join(''):'<div class="empty"><div class="empty-ico">🛒</div>Sin ventas</div>';
+};
+
+window.limpiarFiltrosV=()=>{
+  const nom=document.getElementById('vh-nom');
+  const fecha=document.getElementById('vh-fecha');
+  const tipo=document.getElementById('vh-tipo');
+  if(nom)nom.value='';
+  if(fecha)fecha.value='';
+  if(tipo)tipo.selectedIndex=0;
+  renderVentasHist();
 };
 
 window.editVenta=(id)=>{
