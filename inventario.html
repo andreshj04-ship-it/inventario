@@ -326,16 +326,16 @@ service cloud.firestore {
         <button onclick="ventaTab('historial',this)">Historial</button>
       </div>
       <div id="v-nueva">
-        <div class="card">
+        <div class="card" style="width:100%;overflow:hidden">
           <div class="card-hd"><div class="card-ico ci-blue">🛒</div><div class="card-title">Registrar venta</div></div>
           <label>Cliente</label>
           <select id="v-cli" onchange="updateCliInfo()"><option value="">— Venta directa —</option></select>
           <div id="v-cli-info"></div>
           <label>Lista de precio</label>
-          <div style="display:flex;gap:8px;margin-bottom:10px">
-            <div class="pay-opt sel" id="opt-la" onclick="selLista('A')" style="flex:1;padding:10px 4px;font-size:12px;text-align:center">💰 Precio A<div style="font-size:10px;opacity:.7;margin-top:2px">Normal</div></div>
-            <div class="pay-opt" id="opt-lb" onclick="selLista('B')" style="flex:1;padding:10px 4px;font-size:12px;text-align:center">💎 Precio B<div style="font-size:10px;opacity:.7;margin-top:2px">Especial</div></div>
-            <div class="pay-opt" id="opt-lc" onclick="selLista('C')" style="flex:1;padding:10px 4px;font-size:12px;text-align:center">⭐ Precio C<div style="font-size:10px;opacity:.7;margin-top:2px">Mayorista</div></div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;width:100%">
+            <div class="pay-opt sel" id="opt-la" onclick="selLista('A')" style="flex:1;min-width:0;padding:10px 4px;font-size:12px;text-align:center">💰 Precio A<div style="font-size:10px;opacity:.7;margin-top:2px">Normal</div></div>
+            <div class="pay-opt" id="opt-lb" onclick="selLista('B')" style="flex:1;min-width:0;padding:10px 4px;font-size:12px;text-align:center">💎 Precio B<div style="font-size:10px;opacity:.7;margin-top:2px">Especial</div></div>
+            <div class="pay-opt" id="opt-lc" onclick="selLista('C')" style="flex:1;min-width:0;padding:10px 4px;font-size:12px;text-align:center">⭐ Precio C<div style="font-size:10px;opacity:.7;margin-top:2px">Mayorista</div></div>
           </div>
           <label>Tipo de pago</label>
           <div class="pay-opts">
