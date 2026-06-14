@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Stock Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -964,18 +965,50 @@ window.registrarAbono=async()=>{
   document.getElementById('modal-comp').classList.add('open');
 };
 
-window.compartirComp=()=>{
-  const nombre=document.getElementById('comp-nombre').textContent;
-  const codigo=document.getElementById('comp-codigo').textContent;
-  const monto=document.getElementById('comp-monto').textContent;
-  const fecha=document.getElementById('comp-fecha').textContent;
-  const nota=document.getElementById('comp-nota').textContent;
-  const ant=document.getElementById('comp-saldo-ant').textContent;
-  const nuevo=document.getElementById('comp-saldo-nuevo').textContent;
-  const ts=document.getElementById('comp-timestamp').textContent;
-  const texto=`✅ *Comprobante de Abono*\n\n👤 Cliente: ${nombre} (${codigo})\n📅 Fecha: ${fecha}\n💵 Abono recibido: ${monto}\n📝 Método: ${nota}\n\n📊 *Detalle de cuenta:*\nSaldo anterior: ${ant}\nAbono aplicado: − ${monto}\n*Nuevo saldo: ${nuevo}*\n\n🕐 ${ts}\n_Stock Manager_`;
-  const url=`https://wa.me/?text=${encodeURIComponent(texto)}`;
-  window.open(url,'_blank');
+window.compartirComp=async()=>{
+  const btn=document.querySelector('#modal-comp .btn.pri');
+  if(btn){btn.textContent='Generando imagen...';btn.disabled=true;}
+  try{
+    const card=document.getElementById('comp-card');
+    // Fondo sólido para la captura
+    const orig=card.style.background;
+    card.style.background='#171B26';
+    const canvas=await html2canvas(card,{
+      backgroundColor:'#171B26',
+      scale:2,
+      useCORS:true,
+      logging:false
+    });
+    card.style.background=orig;
+    canvas.toBlob(async(blob)=>{
+      const file=new File([blob],'comprobante-abono.png',{type:'image/png'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        // Compartir imagen nativa (iPhone/Android)
+        await navigator.share({files:[file],title:'Comprobante de Abono'});
+      } else {
+        // Fallback: descargar la imagen
+        const a=document.createElement('a');
+        a.href=URL.createObjectURL(blob);
+        a.download='comprobante-abono.png';
+        a.click();
+        toast('Imagen descargada — compartila desde tu galería');
+      }
+    },'image/png');
+  } catch(e){
+    // Fallback a texto si falla html2canvas
+    const nombre=document.getElementById('comp-nombre').textContent;
+    const codigo=document.getElementById('comp-codigo').textContent;
+    const monto=document.getElementById('comp-monto').textContent;
+    const fecha=document.getElementById('comp-fecha').textContent;
+    const nota=document.getElementById('comp-nota').textContent;
+    const ant=document.getElementById('comp-saldo-ant').textContent;
+    const nuevo=document.getElementById('comp-saldo-nuevo').textContent;
+    const ts=document.getElementById('comp-timestamp').textContent;
+    const texto=`✅ *Comprobante de Abono*\n\n👤 Cliente: ${nombre} (${codigo})\n📅 Fecha: ${fecha}\n💵 Abono recibido: ${monto}\n📝 Método: ${nota}\n\n📊 *Detalle de cuenta:*\nSaldo anterior: ${ant}\nAbono aplicado: − ${monto}\n*Nuevo saldo: ${nuevo}*\n\n🕐 ${ts}\n_Stock Manager_`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`,'_blank');
+  } finally {
+    if(btn){btn.textContent='📤 Compartir comprobante';btn.disabled=false;}
+  }
 };
 window.verHistorial=(id)=>{
   const c=CLIS.find(x=>x.id===id);if(!c)return;
