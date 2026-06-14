@@ -287,9 +287,14 @@ service cloud.firestore {
             <option value="Sets y regalos">🎁 Sets y regalos</option>
             <option value="Otros">📦 Otros</option>
           </select>
-          <div class="row2">
-            <div><label>Precio costo ₡</label><input id="np-costo" type="number" min="0" placeholder="0"></div>
-            <div><label>Precio venta ₡</label><input id="np-venta" type="number" min="0" placeholder="0"></div>
+          <label>Precio de costo ₡</label><input id="np-costo" type="number" min="0" placeholder="0">
+          <div style="background:var(--bg3);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px;border:1px solid var(--border)">
+            <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px">Listas de precio</div>
+            <div class="row2" style="margin-bottom:8px">
+              <div><label>💰 Precio A (normal)</label><input id="np-pa" type="number" min="0" placeholder="0"></div>
+              <div><label>💎 Precio B (especial)</label><input id="np-pb" type="number" min="0" placeholder="0"></div>
+            </div>
+            <div><label>⭐ Precio C (mayorista)</label><input id="np-pc" type="number" min="0" placeholder="0" style="margin-bottom:0"></div>
           </div>
           <div class="row2">
             <div><label>Stock inicial</label><input id="np-stock" type="number" min="0" placeholder="0"></div>
@@ -325,6 +330,12 @@ service cloud.firestore {
           <label>Cliente</label>
           <select id="v-cli" onchange="updateCliInfo()"><option value="">— Venta directa —</option></select>
           <div id="v-cli-info"></div>
+          <label>Lista de precio</label>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+            <div class="pay-opt sel" id="opt-la" onclick="selLista('A')" style="padding:10px 6px;font-size:12px">💰 Precio A<div style="font-size:10px;opacity:.7;margin-top:2px">Normal</div></div>
+            <div class="pay-opt" id="opt-lb" onclick="selLista('B')" style="padding:10px 6px;font-size:12px">💎 Precio B<div style="font-size:10px;opacity:.7;margin-top:2px">Especial</div></div>
+            <div class="pay-opt" id="opt-lc" onclick="selLista('C')" style="padding:10px 6px;font-size:12px">⭐ Precio C<div style="font-size:10px;opacity:.7;margin-top:2px">Mayorista</div></div>
+          </div>
           <label>Tipo de pago</label>
           <div class="pay-opts">
             <div class="pay-opt sel" id="opt-cont" onclick="selPago('contado')">💵 Contado</div>
@@ -384,6 +395,12 @@ service cloud.firestore {
             <div><label>Límite crédito ₡</label><input id="cn-lim" type="number" min="0" placeholder="0"></div>
           </div>
           <label>Dirección</label><input id="cn-dir" placeholder="Barrio, ciudad...">
+          <label>Lista de precio</label>
+          <select id="cn-lista">
+            <option value="A">💰 Precio A — Normal</option>
+            <option value="B">💎 Precio B — Especial</option>
+            <option value="C">⭐ Precio C — Mayorista</option>
+          </select>
           <button class="btn pri" onclick="guardarCliente()">Guardar cliente</button>
           <button class="btn ghost" id="cn-cancel" style="margin-top:6px;display:none" onclick="cancelEditCli()">Cancelar edición</button>
         </div>
@@ -498,7 +515,7 @@ if(auth)onAuthStateChanged(auth,user=>{
 });
 
 let PRODS=[],CLIS=[],VENTAS=[],MOVS=[];
-let ventaItems=[],tipoPago='contado',editProdId=null,editVentaId=null,editCliId=null;
+let ventaItems=[],tipoPago='contado',editProdId=null,editVentaId=null,editCliId=null,listaActiva='A';
 
 function initApp(){
   onSnapshot(collection(db,'productos'),s=>{PRODS=s.docs.map(d=>({id:d.id,...d.data()}));renderInv();fillSelProd();fillSelProdV();updateDash();});
@@ -576,7 +593,9 @@ window.renderInv=()=>{
       </div>
       <div style="display:flex;gap:7px;align-items:center;margin-top:8px;padding-left:48px">
         <span class="isub">Costo: ${fmt(p.costo)}</span>
-        <span style="font-size:12px;font-weight:700;color:var(--accent2)">Venta: ${fmt(p.venta)}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--accent2)">A: ${fmt(p.pa||p.venta||0)}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--green)">B: ${fmt(p.pb||0)}</span>
+        <span style="font-size:11px;font-weight:700;color:var(--amber)">C: ${fmt(p.pc||0)}</span>
         <button class="btn sm ghost" onclick="editProd('${p.id}')" style="margin-left:auto;padding:4px 10px">✏️</button>
         <button class="btn sm dan" onclick="eliminarProd('${p.id}','${p.nombre.replace(/'/g,"\\'")}')">🗑️</button>
       </div>
@@ -595,11 +614,11 @@ window.guardarProd=async()=>{
   const codigoInput=document.getElementById('np-cod').value.trim();
   const codigo=codigoInput||genCod('PRD-',PRODS,'codigo');
   if(!editProdId&&PRODS.some(p=>p.codigo===codigo)){toast('Ese código ya existe',true);return}
-  const data={nombre,codigo,cat:document.getElementById('np-cat').value,costo:+document.getElementById('np-costo').value||0,venta:+document.getElementById('np-venta').value||0,min:+document.getElementById('np-min').value||3,stock:+document.getElementById('np-stock').value||0,updatedAt:serverTimestamp()};
+  const data={nombre,codigo,cat:document.getElementById('np-cat').value,costo:+document.getElementById('np-costo').value||0,pa:+document.getElementById('np-pa').value||0,pb:+document.getElementById('np-pb').value||0,pc:+document.getElementById('np-pc').value||0,venta:+document.getElementById('np-pa').value||0,min:+document.getElementById('np-min').value||3,stock:+document.getElementById('np-stock').value||0,updatedAt:serverTimestamp()};
   if(editProdId){await setDoc(doc(db,'productos',editProdId),data);editProdId=null;}
   else await addDoc(collection(db,'productos'),data);
   toast('Producto guardado');
-  ['np-nom','np-cod','np-costo','np-venta','np-stock','np-min'].forEach(id=>document.getElementById(id).value='');
+  ['np-nom','np-cod','np-costo','np-pa','np-pb','np-pc','np-stock','np-min'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('np-cat').selectedIndex=0;
   document.getElementById('np-card-title').textContent='Nuevo producto';
   document.getElementById('np-cancel').style.display='none';
@@ -612,7 +631,9 @@ window.editProd=(id)=>{
   document.getElementById('np-cod').value=p.codigo;
   document.getElementById('np-cat').value=p.cat||'';
   document.getElementById('np-costo').value=p.costo||0;
-  document.getElementById('np-venta').value=p.venta||0;
+  document.getElementById('np-pa').value=p.pa||p.venta||0;
+  document.getElementById('np-pb').value=p.pb||0;
+  document.getElementById('np-pc').value=p.pc||0;
   document.getElementById('np-min').value=p.min||3;
   document.getElementById('np-stock').value=p.stock||0;
   document.getElementById('np-card-title').textContent='Editar producto';
@@ -622,7 +643,7 @@ window.editProd=(id)=>{
 };
 window.cancelEditProd=()=>{
   editProdId=null;
-  ['np-nom','np-cod','np-costo','np-venta','np-stock','np-min'].forEach(id=>document.getElementById(id).value='');
+  ['np-nom','np-cod','np-costo','np-pa','np-pb','np-pc','np-stock','np-min'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('np-cat').selectedIndex=0;
   document.getElementById('np-card-title').textContent='Nuevo producto';
   document.getElementById('np-cancel').style.display='none';
@@ -656,29 +677,49 @@ function fillSelCli(){
   s.innerHTML='<option value="">— Venta directa —</option>'+CLIS.map(c=>`<option value="${c.id}">${c.nombre} (${c.codigo})</option>`).join('');
   s.value=cur;
 }
+function getPrecio(p,lista){
+  if(lista==='B')return p.pb||p.pa||p.venta||0;
+  if(lista==='C')return p.pc||p.pa||p.venta||0;
+  return p.pa||p.venta||0;
+}
+function getListaCliente(){
+  return listaActiva||'A';
+}
 function fillSelProdV(){
   const s=document.getElementById('v-psel');if(!s)return;
-  s.innerHTML=PRODS.filter(p=>(p.stock||0)>0).map(p=>`<option value="${p.id}">${getCatIco(p.cat)} ${p.nombre} — ${fmt(p.venta)} (${p.stock} disp.)</option>`).join('');
+  const lista=getListaCliente();
+  const listaLabel={A:'💰 A',B:'💎 B',C:'⭐ C'}[lista]||'A';
+  s.innerHTML=PRODS.filter(p=>(p.stock||0)>0).map(p=>`<option value="${p.id}">${getCatIco(p.cat)} ${p.nombre} — ${listaLabel}: ${fmt(getPrecio(p,lista))} (${p.stock} disp.)</option>`).join('');
 }
+window.selLista=(l)=>{
+  listaActiva=l;
+  ['A','B','C'].forEach(x=>document.getElementById('opt-l'+x.toLowerCase())?.classList.toggle('sel',x===l));
+  fillSelProdV();
+};
 window.updateCliInfo=()=>{
   const cid=document.getElementById('v-cli').value;
   const el=document.getElementById('v-cli-info');
-  if(!cid){el.innerHTML='';return}
+  if(!cid){el.innerHTML='';selLista('A');fillSelProdV();return}
   const c=CLIS.find(x=>x.id===cid);if(!c){el.innerHTML='';return}
+  // Auto-seleccionar la lista del cliente pero se puede cambiar manualmente
+  selLista(c.lista||'A');
   const pct=c.limite>0?Math.min(100,Math.round(((c.saldo||0)/(c.limite||1))*100)):0;
   const cls=pct>80?'d':pct>50?'w':'';
   el.innerHTML=`<div style="margin-bottom:10px;padding:10px 12px;background:var(--amber-bg);border:1px solid rgba(245,158,11,.2);border-radius:var(--radius-sm);font-size:13px;color:var(--amber);font-weight:600">Saldo: ${fmt(c.saldo||0)}${c.limite>0?` / Límite: ${fmt(c.limite)}`:''}${c.limite>0?`<div class="credit-bar"><div class="credit-fill ${cls}" style="width:${pct}%"></div></div>`:''}</div>`;
+  fillSelProdV();
 };
 window.addItemVenta=()=>{
   const pid=document.getElementById('v-psel').value;
   const qty=+document.getElementById('v-pqty').value||1;
   if(!pid){toast('Seleccioná un producto',true);return}
   const p=PRODS.find(x=>x.id===pid);
+  const lista=getListaCliente();
+  const precio=getPrecio(p,lista);
   const used=(ventaItems.find(i=>i.pid===pid)?.qty||0)+qty;
   if(used>(p.stock||0)){toast('Stock insuficiente',true);return}
   const ex=ventaItems.find(i=>i.pid===pid);
   if(ex){ex.qty+=qty;ex.sub=ex.qty*ex.precio;}
-  else ventaItems.push({pid,nombre:p.nombre,cat:p.cat||'',qty,precio:p.venta||0,sub:qty*(p.venta||0)});
+  else ventaItems.push({pid,nombre:p.nombre,cat:p.cat||'',qty,precio,sub:qty*precio,lista});
   renderItemsV();
 };
 window.removeItemV=(pid)=>{ventaItems=ventaItems.filter(i=>i.pid!==pid);renderItemsV();};
@@ -693,10 +734,30 @@ window.guardarVenta=async()=>{
   const fecha=document.getElementById('v-fecha').value||today();
   const total=ventaItems.reduce((a,i)=>a+i.sub,0);
   if(editVentaId){
+    // Obtener la venta original para revertir el saldo si era a crédito
+    const ventaOriginal=VENTAS.find(v=>v.id===editVentaId);
+    // Revertir saldo anterior si la venta original era a crédito
+    if(ventaOriginal?.tipo==='credito'&&ventaOriginal?.clienteId){
+      const cOrig=CLIS.find(x=>x.id===ventaOriginal.clienteId);
+      if(cOrig){
+        const saldoRevertido=Math.max(0,(cOrig.saldo||0)-(ventaOriginal.total||0));
+        await updateDoc(doc(db,'clientes',ventaOriginal.clienteId),{saldo:saldoRevertido,updatedAt:serverTimestamp()});
+      }
+    }
+    // Guardar venta editada
     await updateDoc(doc(db,'ventas',editVentaId),{fecha,clienteId:cid||null,tipo:tipoPago,total,items:ventaItems.map(i=>({...i})),updatedAt:serverTimestamp()});
+    // Aplicar nuevo saldo si la venta editada es a crédito
+    if(cid&&tipoPago==='credito'){
+      const c=CLIS.find(x=>x.id===cid);
+      if(c){
+        const hist=(c.historial||[]);
+        hist.push({tipo:'venta',fecha,monto:total,nota:'Venta editada'});
+        await updateDoc(doc(db,'clientes',cid),{saldo:(c.saldo||0)+total,historial:hist,updatedAt:serverTimestamp()});
+      }
+    }
     editVentaId=null;
     document.getElementById('v-guardar-btn').textContent='Registrar venta';
-    toast('Venta actualizada');
+    toast('Venta actualizada ✓');
   } else {
     await addDoc(collection(db,'ventas'),{fecha,clienteId:cid||null,tipo:tipoPago,total,items:ventaItems.map(i=>({...i})),createdAt:serverTimestamp()});
     for(const i of ventaItems){const p=PRODS.find(x=>x.id===i.pid);if(p)await updateDoc(doc(db,'productos',i.pid),{stock:(p.stock||0)-i.qty,updatedAt:serverTimestamp()});}
@@ -709,6 +770,7 @@ window.guardarVenta=async()=>{
   }
   ventaItems=[];renderItemsV();
   document.getElementById('v-cli').value='';updateCliInfo();fillSelProdV();
+  selLista('A');
 };
 window.renderVentasHist=()=>{
   const nom=(document.getElementById('vh-nom')||{}).value?.toLowerCase()||'';
@@ -778,14 +840,22 @@ window.eliminarVenta=async(id,fecha)=>{
 window.renderClis=()=>{
   const q=(document.getElementById('cli-q')||{}).value?.toLowerCase()||'';
   const lista=CLIS.filter(c=>c.nombre?.toLowerCase().includes(q)||c.codigo?.toLowerCase().includes(q));
+  const listaInfo={A:{label:'Precio A — Normal',color:'var(--accent2)',bg:'var(--accent-bg)'},B:{label:'Precio B — Especial',color:'var(--green)',bg:'var(--green-bg)'},C:{label:'Precio C — Mayorista',color:'var(--amber)',bg:'var(--amber-bg)'}};
   document.getElementById('cli-list').innerHTML=lista.length?lista.map(c=>{
     const pct=c.limite>0?Math.min(100,Math.round(((c.saldo||0)/(c.limite||1))*100)):0;
     const cls=pct>80?'d':pct>50?'w':'';
+    const li=listaInfo[c.lista||'A'];
     return`<div class="card" style="margin-bottom:8px">
       <div class="ir">
         <div style="display:flex;align-items:center;gap:10px">
           <div style="width:38px;height:38px;border-radius:50%;background:var(--accent-bg);border:1px solid rgba(59,130,246,.25);color:var(--accent2);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${c.nombre.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}</div>
-          <div><div style="font-weight:700">${c.nombre}</div><span class="badge bb" style="margin-top:3px">${c.codigo}</span></div>
+          <div>
+            <div style="font-weight:700">${c.nombre}</div>
+            <div style="display:flex;gap:5px;margin-top:3px;flex-wrap:wrap">
+              <span class="badge bb">${c.codigo}</span>
+              <span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:${li.bg};color:${li.color}">${li.label}</span>
+            </div>
+          </div>
         </div>
         <span class="badge ${(c.saldo||0)>0?'ba':'bg'}">${fmt(c.saldo||0)}</span>
       </div>
@@ -794,7 +864,7 @@ window.renderClis=()=>{
       <div style="display:flex;gap:7px;margin-top:10px">
         <button class="btn sm ghost" onclick="verHistorial('${c.id}')">📋 Historial</button>
         <button class="btn sm suc" onclick="prepAbono('${c.id}')">💰 Abonar</button>
-        <button class="btn sm ghost" onclick="editCliente('${c.id}')" style="margin-left:auto">✏️</button>
+        <button class="btn sm ghost" onclick="editCliente('${c.id}')" style="margin-left:auto">✏️ Editar</button>
         <button class="btn sm dan" onclick="eliminarCliente('${c.id}','${c.nombre.replace(/'/g,"\\'")}')">🗑️</button>
       </div>
     </div>`;
@@ -807,14 +877,13 @@ window.guardarCliente=async()=>{
   const codigo=codigoInput||genCod('CLI-',CLIS,'codigo');
   if(CLIS.some(c=>c.codigo===codigo&&c.id!==editCliId)){toast('Ese código ya existe',true);return}
   if(editCliId){
-    const c=CLIS.find(x=>x.id===editCliId);
-    await updateDoc(doc(db,'clientes',editCliId),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,updatedAt:serverTimestamp()});
+    await updateDoc(doc(db,'clientes',editCliId),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,lista:document.getElementById('cn-lista').value||'A',updatedAt:serverTimestamp()});
     editCliId=null;
     document.getElementById('cn-card-title').textContent='Nuevo cliente';
     document.getElementById('cn-cancel').style.display='none';
     toast('Cliente actualizado');
   } else {
-    await addDoc(collection(db,'clientes'),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,saldo:0,historial:[],createdAt:serverTimestamp()});
+    await addDoc(collection(db,'clientes'),{nombre,codigo,tel:document.getElementById('cn-tel').value,dir:document.getElementById('cn-dir').value,limite:+document.getElementById('cn-lim').value||0,lista:document.getElementById('cn-lista').value||'A',saldo:0,historial:[],createdAt:serverTimestamp()});
     toast('Cliente guardado');
   }
   ['cn-nom','cn-cod','cn-tel','cn-lim','cn-dir'].forEach(id=>document.getElementById(id).value='');
@@ -829,6 +898,7 @@ window.editCliente=(id)=>{
   document.getElementById('cn-tel').value=c.tel||'';
   document.getElementById('cn-dir').value=c.dir||'';
   document.getElementById('cn-lim').value=c.limite||0;
+  document.getElementById('cn-lista').value=c.lista||'A';
   document.getElementById('cn-card-title').textContent='Editar cliente';
   document.getElementById('cn-cancel').style.display='flex';
   cliTab('nuevo',document.querySelectorAll('#page-clis .tabs button')[1]);
