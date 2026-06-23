@@ -727,10 +727,15 @@ window.removeItemV=(pid)=>{ventaItems=ventaItems.filter(i=>i.pid!==pid);renderIt
 window.updateQtyV=(pid,qty)=>{
   const item=ventaItems.find(i=>i.pid===pid);
   if(!item)return;
-  const p=PRODS.find(x=>x.id===pid);
   const newQty=parseInt(qty)||1;
-  if(p&&newQty>(p.stock||0)){toast('Stock insuficiente — máximo: '+p.stock,true);return;}
   if(newQty<1){toast('Cantidad mínima es 1',true);return;}
+  const p=PRODS.find(x=>x.id===pid);
+  if(p){
+    // Si estamos editando una venta existente, el stock disponible incluye lo que ya tenía esa venta
+    const qtyOriginal=editVentaId?(VENTAS.find(v=>v.id===editVentaId)?.items||[]).find(i=>i.pid===pid)?.qty||0:0;
+    const stockDisponible=(p.stock||0)+qtyOriginal;
+    if(newQty>stockDisponible){toast('Stock insuficiente — máximo disponible: '+stockDisponible,true);return;}
+  }
   item.qty=newQty;item.sub=newQty*item.precio;
   renderItemsV();
 };
