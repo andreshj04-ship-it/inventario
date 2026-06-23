@@ -724,8 +724,32 @@ window.addItemVenta=()=>{
   renderItemsV();
 };
 window.removeItemV=(pid)=>{ventaItems=ventaItems.filter(i=>i.pid!==pid);renderItemsV();};
+window.updateQtyV=(pid,qty)=>{
+  const item=ventaItems.find(i=>i.pid===pid);
+  if(!item)return;
+  const p=PRODS.find(x=>x.id===pid);
+  const newQty=parseInt(qty)||1;
+  if(p&&newQty>(p.stock||0)){toast('Stock insuficiente — máximo: '+p.stock,true);return;}
+  if(newQty<1){toast('Cantidad mínima es 1',true);return;}
+  item.qty=newQty;item.sub=newQty*item.precio;
+  renderItemsV();
+};
 function renderItemsV(){
-  document.getElementById('v-items').innerHTML=ventaItems.map(i=>`<div class="item"><div class="ir"><span style="display:flex;align-items:center;gap:7px"><span>${getCatIco(i.cat)}</span>${i.nombre} ×${i.qty}</span><span style="display:flex;align-items:center;gap:7px;font-weight:600">${fmt(i.sub)}<button class="btn sm dan" onclick="removeItemV('${i.pid}')" style="padding:3px 8px">✕</button></span></div></div>`).join('');
+  document.getElementById('v-items').innerHTML=ventaItems.map(i=>`
+    <div class="item">
+      <div class="ir">
+        <span style="display:flex;align-items:center;gap:7px;font-size:13px"><span>${getCatIco(i.cat)}</span>${i.nombre}</span>
+        <button class="btn sm dan" onclick="removeItemV('${i.pid}')" style="padding:3px 8px;flex-shrink:0">✕</button>
+      </div>
+      <div class="ir" style="margin-top:7px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="btn sm ghost" onclick="updateQtyV('${i.pid}',${i.qty-1})" style="padding:2px 12px;font-size:18px;font-weight:700;line-height:1.4">−</button>
+          <span style="font-weight:700;min-width:24px;text-align:center;font-size:15px">${i.qty}</span>
+          <button class="btn sm ghost" onclick="updateQtyV('${i.pid}',${i.qty+1})" style="padding:2px 12px;font-size:18px;font-weight:700;line-height:1.4">+</button>
+        </div>
+        <span style="font-weight:700;color:var(--accent2);font-size:15px">${fmt(i.sub)}</span>
+      </div>
+    </div>`).join('');
   const tot=ventaItems.reduce((a,i)=>a+i.sub,0);
   document.getElementById('v-total').textContent=ventaItems.length?'Total: '+fmt(tot):'';
 }
@@ -833,9 +857,20 @@ window.editVenta=(id)=>{
 };
 
 window.eliminarVenta=async(id,fecha)=>{
-  if(!confirm(`¿Eliminar la venta del ${fecha}?\nEsto no restaura el stock automáticamente.`))return;
+  if(!confirm(`¿Eliminar la venta del ${fecha}?\nEl stock será restaurado automáticamente.`))return;
+  const v=VENTAS.find(x=>x.id===id);
+  if(v){
+    for(const i of(v.items||[])){
+      const p=PRODS.find(x=>x.id===i.pid);
+      if(p)await updateDoc(doc(db,'productos',i.pid),{stock:(p.stock||0)+i.qty,updatedAt:serverTimestamp()});
+    }
+    if(v.tipo==='credito'&&v.clienteId){
+      const c=CLIS.find(x=>x.id===v.clienteId);
+      if(c){await updateDoc(doc(db,'clientes',v.clienteId),{saldo:Math.max(0,(c.saldo||0)-(v.total||0)),updatedAt:serverTimestamp()});}
+    }
+  }
   await deleteDoc(doc(db,'ventas',id));
-  toast('Venta eliminada');
+  toast('Venta eliminada y stock restaurado');
 };
 
 window.renderClis=()=>{
